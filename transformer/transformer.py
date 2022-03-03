@@ -17,10 +17,10 @@ class Transformer(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
 
-    def forward(self, x, z):
-        c = self.encoder(x)
-        y = self.decoder(z, c)
-        return y
+    def forward(self, src, trg, mask):
+        encoder_output = self.encoder(src, mask)
+        out = self.decoder(trg, encoder_output)
+        return out
 
 
 class Encoder(nn.Module):
@@ -30,11 +30,11 @@ class Encoder(nn.Module):
         for i in range(n_layer):
             self.layers.append(copy.deepcopy(encoder_layer))
 
-    def forward(self, x):
+    def forward(self, x, mask):
         out = x
         for layer in self.layers:
-            out = layer(out)
-        return 
+            out = layer(out, mask)
+        return out
 
 class EncoderLayer(nn.Module):
 
@@ -42,6 +42,11 @@ class EncoderLayer(nn.Module):
         super(EncoderLayer, self).__init__()
         self.multi_head_attention_layer = multi_head_attention_layer
         self.position_wise_feed_forward_layer = position_wise_feed_forward_layer
+
+    def forward(self, x, mask):
+        out = self.multi_head_attention_layer(query=x, key=x, value=x, mask=mask)
+        out = self.positional_wise_feed_forward_layer(out)
+        return out
 
 def calculate_attention(self, query, key, value, mask):
     d_k = key.size(-1) #d_k 크기를 가져옴
@@ -65,7 +70,9 @@ class MultiHeadAttentionLayer(nn.Module):
         self.d_model = d_model
         self.d_model = d_model
         self.h = h
-        self.query_fc_layer = self.key_fc_layer = self.value_fc_layer= copy.deepcopy(qkv_fc_layer)
+        self.query_fc_layer = copy.deepcopy(qkv_fc_layer)
+        self.key_fc_layer = copy.deepcopy(qkv_fc_layer)
+        self.value_fc_layer = copy.deepcopy(qkv_fc_layer)
         self.fc_layer = fc_layer
 
         def forward(self, query, key, value, mask=None):
@@ -93,4 +100,16 @@ class MultiHeadAttentionLayer(nn.Module):
             return out
 
             
+class PositionWiseFeedForwardLayer(nn.Module):
+    def __init__(self, first_fc_layer, second_fc_layer):
+        self.first_fc_layer = first_fc_layer
+        self.second_fc_layer = second_fc_layer
 
+    def forward(self, x):
+        out = self.first_fc_layer(x)
+        out = F.relu(out)
+        out = self.dropout(out)
+        out = self.second_fc_layer(out)
+        return out
+
+        
