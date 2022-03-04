@@ -18,8 +18,8 @@ class Transformer(nn.Module):
         self.decoder = decoder
 
     def forward(self, src, trg, mask):
-        encoder_output = self.encoder(src, mask)
-        out = self.decoder(trg, encoder_output)
+        encoder_output = self.encoder(src, mask) # encoder에 입력과 mask를 넣어 context vector를 생성함
+        out = self.decoder(trg, encoder_output)  # context vector(encoder_output)와 타겟을 decoder에 입력. 최종 결과물을 얻는다.
         return out
 
 
@@ -28,9 +28,9 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.layers = []
         for i in range(n_layer):
-            self.layers.append(copy.deepcopy(encoder_layer))
+            self.layers.append(copy.deepcopy(encoder_layer)) # n_layer 만큼 encoder_layer를 쌓는다.
 
-    def forward(self, x, mask):
+    def forward(self, x, mask): # encoder_layers를 각각 통과하면 고차원의 context vector를 생성함
         out = x
         for layer in self.layers:
             out = layer(out, mask)
@@ -113,3 +113,12 @@ class PositionWiseFeedForwardLayer(nn.Module):
         return out
 
         
+class ResidualConnectionLayer(nn.Module):
+    def __init__(self, norm_layer):
+        super(ResidualConnectionLayer, self).__init__()
+        self.norm_layer = norm_layer
+
+    def forward(self, x, sub_layer):
+        out = sub_layer(x) + x
+        out = self.norm_layer(out)
+        return out
