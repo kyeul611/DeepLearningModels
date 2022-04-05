@@ -57,7 +57,49 @@ def window_reverse():
     return x
 
 class SwinMLPBlock(nn.Module):
-    pass
+    
+    def __init__(self, dim, input_resolution, num_heads, window_size=7, shift_size=0, mlp_ratio=4., drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.dim = dim
+        self.input_resolution = input_resolution
+        self.num_heads = num_heads
+        self.window_size = window_size
+        self.shift_size = shift_size
+        self.mlp_ratio = mlp_ratio
+
+        if min(self.input_resolution) <= self.window_size:
+            # 윈도우 사이즈가 input resolution보다 크다면 partition windows를 하지 않음
+            self.shift_size = 0
+            self.window_size = min(self.input_resolution)
+        
+        assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
+
+        self.padding = [self.window_size - self.shift_size, self.shift_size, 
+                        self.window_size - self.shift_size, self.shift_size]
+
+        self.norm1 = norm_layer(dim)
+
+        # group Convolution을 사용해서 multi-head MLP를 implement함
+        self.spatial_mlp = nn.Conv1d(self.num_heads * self.window_size ** 2,
+                                    self.num_heads * self.window_size ** 2,
+                                    kernel_size = 1,
+                                    groups = self.num_heads)
+                                    
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.norm2 = norm_layer(dim)
+        mlp_hidden_dim = int(dim*mlp_ratio)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        
+
+    def forward():
+        pass
+
+    def extra_repr() -> str:
+        pass
+
+    def flops():
+        pass
+
 
 class PatchMerging(nn.Module):
     pass
