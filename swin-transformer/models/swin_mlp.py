@@ -91,8 +91,53 @@ class SwinMLPBlock(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
         
 
-    def forward():
-        pass
+    def forward(self, x):
+
+        H, W = self.input_resolution
+        B, L, C = x.shape
+        assert L == H * W, "input feature has wrong size"
+
+        shortcut = x
+        x = self.norm1(x)
+        x = x.view(B, H, W, C)
+
+        # shift
+        if self.shift_size > 0:
+            P_l, P_r, P_t, P_b = self.padding
+            shifted_x = F.pad(x, [0, 0, P_l, P_r, P_t, P_b], "constant", 0)
+        else:
+            shifted_x = x
+        _, _H, _W, _ = shifted_x.shape
+
+        # partition windows
+        x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
+        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
+
+        # Window/Shifted-Window Spatial MLP
+        x_windows_heads = x_windows.view(-1, self.window_size * self.window_size, self.num_heads, C // self.num_heads)
+        x_windows_heads = x_windows_heads.transpose(1, 2)  # nW*B, nH, window_size*window_size, C//nH
+        x_windows_heads = x_windows_heads.reshape(-1, self.num_heads * self.window_size * self.window_size, C // self.num_heads)
+        spatial_mlp_windows = self.spatial_mlp(x_windows_heads)  # nW*B, nH*window_size*window_size, C//nH
+        spatial_mlp_windows = spatial_mlp_windows.view(-1, self.num_heads, self.window_size * self.window_size, C // self.num_heads).transpose(1, 2)
+        spatial_mlp_windows = spatial_mlp_windows.reshape(-1, self.window_size * self.window_size, C)
+
+        # merge windows
+        spatial_mlp_windows = spatial_mlp_windows.reshape(-1, self.window_size, self.window_size, C)
+        shifted_x = window_reverse(spatial_mlp_windows, self.window_size, _H, _W)  # B H' W' C
+
+        # reverse shift
+        if self.shift_size > 0:
+            P_l, P_r, P_t, P_b = self.padding
+            x = shifted_x[:, P_t:-P_b, P_l:-P_r, :].contiguous()
+        else:
+            x = shifted_x
+        x = x.view(B, H * W, C)
+
+        # FFN
+        x = shortcut + self.drop_path(x)
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
+
+        return x
 
     def extra_repr() -> str:
         pass
